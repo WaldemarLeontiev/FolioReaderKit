@@ -168,6 +168,24 @@ extension FolioReader {
         parentViewController.present(readerContainer, animated: animated, completion: nil)
         addObservers()
     }
+    
+    /// Present a Folio Reader Container inside Parent View Controller.
+    open func addReader(to parentViewController: UIViewController, in parentView: UIView, withEpubPath epubPath: String,
+                        unzipPath: String? = nil, andConfig config: FolioReaderConfig, shouldRemoveEpub: Bool = true, animated: Bool = true) {
+        let readerContainer = FolioReaderContainer(withConfig: config, folioReader: self, epubPath: epubPath, unzipPath: unzipPath, removeEpub: shouldRemoveEpub)
+        self.readerContainer = readerContainer
+        parentViewController.addChild(readerContainer)
+        parentView.addSubview(readerContainer.view)
+        readerContainer.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            readerContainer.view.leftAnchor.constraint(equalTo: parentView.leftAnchor),
+            readerContainer.view.rightAnchor.constraint(equalTo: parentView.rightAnchor),
+            readerContainer.view.topAnchor.constraint(equalTo: parentView.topAnchor),
+            readerContainer.view.bottomAnchor.constraint(equalTo: parentView.bottomAnchor)
+        ])
+        readerContainer.didMove(toParent: parentViewController)
+        addObservers()
+    }
 }
 
 // MARK: -  Getters and setters for stored values
