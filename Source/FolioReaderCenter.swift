@@ -267,10 +267,13 @@ open class FolioReaderCenter: UIViewController, UICollectionViewDelegate, UIColl
         let fontIcon = UIImage(readerImageNamed: "icon-navbar-font")?.ignoreSystemTint(withConfiguration: self.readerConfig)
         let space = 70 as CGFloat
 
-        let menu = UIBarButtonItem(image: closeIcon, style: .plain, target: self, action:#selector(closeReader(_:)))
-        let toc = UIBarButtonItem(image: tocIcon, style: .plain, target: self, action:#selector(presentChapterList(_:)))
-
-        navigationItem.leftBarButtonItems = [menu, toc]
+        var leftBarIcons = [UIBarButtonItem]()
+        if self.readerConfig.showCloseButton {
+            leftBarIcons.append(UIBarButtonItem(image: closeIcon, style: .plain, target: self, action:#selector(closeReader(_:))))
+        }
+        leftBarIcons.append(UIBarButtonItem(image: tocIcon, style: .plain, target: self, action:#selector(presentChapterList(_:))))
+        
+        navigationItem.leftBarButtonItems = leftBarIcons
 
         var rightBarIcons = [UIBarButtonItem]()
 

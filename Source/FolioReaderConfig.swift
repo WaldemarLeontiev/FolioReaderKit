@@ -162,6 +162,9 @@ open class FolioReaderConfig: NSObject {
     /// Go to saved position when open a book
     open var loadSavedPositionForCurrentBook = true
     
+    /// Show close button
+    open var showCloseButton = true
+    
     // MARK: Quote image share
 
     /// Custom Quote logo
