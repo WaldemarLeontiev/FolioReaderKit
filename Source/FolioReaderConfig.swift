@@ -168,6 +168,9 @@ open class FolioReaderConfig: NSObject {
     /// Show define in context menu
     open var allowDefine = true
     
+    /// Show day/night switch
+    open var allowDayNightSwitch = true
+    
     // MARK: Quote image share
 
     /// Custom Quote logo
