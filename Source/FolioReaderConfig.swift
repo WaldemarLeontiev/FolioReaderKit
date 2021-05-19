@@ -165,6 +165,9 @@ open class FolioReaderConfig: NSObject {
     /// Show close button
     open var showCloseButton = true
     
+    /// Show define in context menu
+    open var allowDefine = true
+    
     // MARK: Quote image share
 
     /// Custom Quote logo
