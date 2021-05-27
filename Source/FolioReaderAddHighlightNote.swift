@@ -12,12 +12,11 @@ class FolioReaderAddHighlightNote: UIViewController {
 
     var textView: UITextView!
     var highlightLabel: UILabel!
-    var scrollView: UIScrollView!
-    var containerView = UIView()
     var highlight: Highlight!
     var highlightSaved = false
     var isEditHighlight = false
     var resizedTextView = false
+    var textViewBottomConstraint: NSLayoutConstraint!
     
     private var folioReader: FolioReader
     private var readerConfig: FolioReaderConfig
@@ -40,9 +39,7 @@ class FolioReaderAddHighlightNote: UIViewController {
         super.viewDidLoad()
         
         setCloseButton(withConfiguration: readerConfig)
-        prepareScrollView()
-        configureTextView()
-        configureLabel()
+        setupUI()
         configureNavBar()
         configureKeyboardObserver()
     }
@@ -50,16 +47,10 @@ class FolioReaderAddHighlightNote: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         
-        textView.becomeFirstResponder()
+        if !isEditHighlight {
+            textView.becomeFirstResponder()
+        }
         setNeedsStatusBarAppearanceUpdate()
-    }
-    
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        
-        scrollView.frame = view.bounds
-        containerView.frame = view.bounds
-        scrollView.contentSize = view.bounds.size
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -72,61 +63,36 @@ class FolioReaderAddHighlightNote: UIViewController {
     }
     
     // MARK: - private methods
-    
-    private func prepareScrollView(){
-        scrollView = UIScrollView()
-        scrollView.delegate = self as UIScrollViewDelegate
-        scrollView.contentSize = CGSize.init(width: view.frame.width, height: view.frame.height )
-        scrollView.bounces = false
-        
-        containerView = UIView()
-        containerView.backgroundColor = .white
-        scrollView.addSubview(containerView)
-        view.addSubview(scrollView)
-        
-        let leftConstraint = NSLayoutConstraint(item: scrollView!, attribute: .left, relatedBy: .equal, toItem: view, attribute: .left, multiplier: 1.0, constant: 0)
-        let rightConstraint = NSLayoutConstraint(item: scrollView!, attribute: .right, relatedBy: .equal, toItem: view, attribute: .right, multiplier: 1.0, constant: 0)
-        let topConstraint = NSLayoutConstraint(item: scrollView, attribute: .top, relatedBy: .equal, toItem: view, attribute: .top, multiplier: 1, constant: 0)
-        let botConstraint = NSLayoutConstraint(item: scrollView, attribute: .bottom, relatedBy: .equal, toItem: view, attribute: .bottom, multiplier: 1, constant: 0)
-        
-        view.addConstraints([leftConstraint, rightConstraint, topConstraint, botConstraint])
-    }
-    
-    private func configureTextView(){
-        textView = UITextView()
-        textView.delegate = self
-        textView.translatesAutoresizingMaskIntoConstraints = false
-        textView.textColor = .black
-        textView.backgroundColor = .clear
-        textView.font = UIFont.boldSystemFont(ofSize: 15)
-        containerView.addSubview(textView)
-        
-        if isEditHighlight {
-             textView.text = highlight.noteForHighlight
-        }
-        
-        let leftConstraint = NSLayoutConstraint(item: textView!, attribute: .left, relatedBy: .equal, toItem: containerView, attribute: .left, multiplier: 1.0, constant: 20)
-        let rightConstraint = NSLayoutConstraint(item: textView!, attribute: .right, relatedBy: .equal, toItem: containerView, attribute: .right, multiplier: 1.0, constant: -20)
-        let topConstraint = NSLayoutConstraint(item: textView, attribute: .top, relatedBy: .equal, toItem: containerView, attribute: .top, multiplier: 1, constant: 100)
-        let heiConstraint = NSLayoutConstraint(item: textView, attribute: .height, relatedBy: .equal, toItem: nil, attribute: .height, multiplier: 1, constant: view.frame.height - 100)
-        containerView.addConstraints([leftConstraint, rightConstraint, topConstraint, heiConstraint])
-    }
-    
-    private func configureLabel() {
+    private func setupUI() {
+        view.backgroundColor = .white
         highlightLabel = UILabel()
         highlightLabel.translatesAutoresizingMaskIntoConstraints = false
         highlightLabel.numberOfLines = 3
         highlightLabel.font = UIFont.systemFont(ofSize: 15)
         highlightLabel.text = highlight.content.stripHtml().truncate(250, trailing: "...").stripLineBreaks()
+        view.addSubview(highlightLabel)
+        NSLayoutConstraint.activate([
+            highlightLabel.leftAnchor.constraint(equalTo: view.leftAnchor, constant: 20),
+            highlightLabel.rightAnchor.constraint(equalTo: view.rightAnchor, constant: -20),
+            highlightLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 20)
+        ])
         
-        containerView.addSubview(self.highlightLabel!)
-        
-        let leftConstraint = NSLayoutConstraint(item: highlightLabel!, attribute: .left, relatedBy: .equal, toItem: containerView, attribute: .left, multiplier: 1.0, constant: 20)
-        let rightConstraint = NSLayoutConstraint(item: highlightLabel!, attribute: .right, relatedBy: .equal, toItem: containerView, attribute: .right, multiplier: 1.0, constant: -20)
-        let topConstraint = NSLayoutConstraint(item: highlightLabel, attribute: .top, relatedBy: .equal, toItem: containerView, attribute: .top, multiplier: 1, constant: 20)
-        let heiConstraint = NSLayoutConstraint(item: highlightLabel, attribute: .height, relatedBy: .equal, toItem: nil, attribute: .height, multiplier: 1, constant: 70)
-        
-        containerView.addConstraints([leftConstraint, rightConstraint, topConstraint, heiConstraint])
+        textView = UITextView()
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.textColor = .black
+        textView.backgroundColor = .clear
+        textView.font = UIFont.boldSystemFont(ofSize: 15)
+        if isEditHighlight {
+             textView.text = highlight.noteForHighlight
+        }
+        view.addSubview(textView)
+        textViewBottomConstraint = textView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20)
+        NSLayoutConstraint.activate([
+            textView.leftAnchor.constraint(equalTo: view.leftAnchor, constant: 16),
+            textView.rightAnchor.constraint(equalTo: view.rightAnchor, constant: -16),
+            textView.topAnchor.constraint(equalTo: highlightLabel.bottomAnchor, constant: 20),
+            textViewBottomConstraint
+        ])
     }
     
     private func configureNavBar() {
@@ -152,15 +118,13 @@ class FolioReaderAddHighlightNote: UIViewController {
         var userInfo = notification.userInfo!
         var keyboardFrame:CGRect = (userInfo[UIResponder.keyboardFrameBeginUserInfoKey] as! NSValue).cgRectValue
         keyboardFrame = self.view.convert(keyboardFrame, from: nil)
-        
-        var contentInset:UIEdgeInsets = self.scrollView.contentInset
-        contentInset.bottom = keyboardFrame.size.height
-        self.scrollView.contentInset = contentInset
+        textViewBottomConstraint.constant = -keyboardFrame.height - 20
+        view.layoutSubviews()
     }
     
     @objc private func keyboardWillHide(notification:NSNotification){
-        let contentInset:UIEdgeInsets = UIEdgeInsets.zero
-        self.scrollView.contentInset = contentInset
+        textViewBottomConstraint.constant = -20
+        view.layoutSubviews()
     }
     
     @objc private func saveNote(_ sender: UIBarButtonItem) {
@@ -179,31 +143,5 @@ class FolioReaderAddHighlightNote: UIViewController {
         }
         
         dismiss()
-    }
-}
-
-// MARK: - UITextViewDelegate
-extension FolioReaderAddHighlightNote: UITextViewDelegate {
-    
-    func textViewDidChange(_ textView: UITextView) {
-        let fixedWidth = textView.frame.size.width
-        textView.sizeThatFits(CGSize(width: fixedWidth, height: CGFloat.greatestFiniteMagnitude))
-        let newSize = textView.sizeThatFits(CGSize(width: fixedWidth, height: CGFloat.greatestFiniteMagnitude))
-        var newFrame = textView.frame
-        newFrame.size = CGSize(width: max(newSize.width, fixedWidth), height: newSize.height + 15)
-        textView.frame = newFrame;
-    }
-    
-    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        textView.frame.size.height = textView.frame.height + 30
-
-        if resizedTextView {
-            scrollView.scrollRectToVisible(textView.frame, animated: true)
-        }
-        else{
-            resizedTextView = true
-        }
-        
-        return true
     }
 }
