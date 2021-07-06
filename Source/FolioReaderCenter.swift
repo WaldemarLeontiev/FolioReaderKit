@@ -1287,8 +1287,11 @@ open class FolioReaderCenter: UIViewController, UICollectionViewDelegate, UIColl
         }
     }
     private func jumpTo(searchResult: SearchResult) {
-        self.changePageWith(page: searchResult.page + 1, animated: false) { [weak self] in
-            self?.currentPage?.handleAnchor(searchResult.id, avoidBeginningAnchors: true, animated: false)
+        if self.currentPage?.pageNumber == searchResult.page + 1 {
+            self.currentPage?.handleAnchor(searchResult.id, avoidBeginningAnchors: true, animated: false)
+        } else {
+            tempFragment = searchResult.id
+            self.changePageWith(page: searchResult.page + 1, animated: false, completion: nil)
         }
     }
 
