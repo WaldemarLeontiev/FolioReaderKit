@@ -265,6 +265,7 @@ open class FolioReaderCenter: UIViewController, UICollectionViewDelegate, UIColl
         let closeIcon = UIImage(readerImageNamed: "icon-navbar-close")?.ignoreSystemTint(withConfiguration: self.readerConfig)
         let tocIcon = UIImage(readerImageNamed: "icon-navbar-toc")?.ignoreSystemTint(withConfiguration: self.readerConfig)
         let fontIcon = UIImage(readerImageNamed: "icon-navbar-font")?.ignoreSystemTint(withConfiguration: self.readerConfig)
+        let searchIcon = UIImage(readerImageNamed: "icon-navbar-search")?.ignoreSystemTint(withConfiguration: self.readerConfig)
         let space = 70 as CGFloat
 
         var leftBarIcons = [UIBarButtonItem]()
@@ -284,11 +285,11 @@ open class FolioReaderCenter: UIViewController, UICollectionViewDelegate, UIColl
         if self.book.hasAudio || self.readerConfig.enableTTS {
             rightBarIcons.append(UIBarButtonItem(image: audioIcon, style: .plain, target: self, action:#selector(presentPlayerMenu(_:))))
         }
-
+        
+        let search = UIBarButtonItem(image: searchIcon, style: .plain, target: self, action: #selector(presentSearchMenu))
         let font = UIBarButtonItem(image: fontIcon, style: .plain, target: self, action: #selector(presentFontsMenu))
-        font.width = space
 
-        rightBarIcons.append(contentsOf: [font])
+        rightBarIcons.append(contentsOf: [search, font])
         navigationItem.rightBarButtonItems = rightBarIcons
         
         if(self.readerConfig.displayTitle){
@@ -467,6 +468,7 @@ open class FolioReaderCenter: UIViewController, UICollectionViewDelegate, UIColl
         guard var html = try? String(contentsOfFile: resource.fullHref, encoding: String.Encoding.utf8) else {
             return cell
         }
+        html = htmlContentWithInsertSearchResults(html, pageNumber: indexPath.row)
 
         let mediaOverlayStyleColors = "\"\(self.readerConfig.mediaOverlayColor.hexString(false))\", \"\(self.readerConfig.mediaOverlayColor.highlightColor().hexString(false))\""
 
@@ -1043,6 +1045,27 @@ open class FolioReaderCenter: UIViewController, UICollectionViewDelegate, UIColl
         
         return foundChapterName
     }
+    public func getChapterName(forPage pageNumber: Int) -> String? {
+        var foundChapterName: String?
+        
+        func search(_ items: [FRTocReference]) {
+            for item in items {
+                guard foundChapterName == nil else { break }
+                
+                if let reference = self.book.spine.spineReferences[safe: pageNumber],
+                    let resource = item.resource,
+                    resource == reference.resource,
+                    let title = item.title {
+                    foundChapterName = title
+                } else if let children = item.children, children.isEmpty == false {
+                    search(children)
+                }
+            }
+        }
+        search(self.book.flatTableOfContents)
+        
+        return foundChapterName
+    }
 
     // MARK: Public page methods
 
@@ -1191,6 +1214,85 @@ open class FolioReaderCenter: UIViewController, UICollectionViewDelegate, UIColl
         }
 
         present(activityViewController, animated: true, completion: nil)
+    }
+    
+    // MARK: - Search
+    private func search(text: String, completion: @escaping ([SearchResult]) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            var results: [SearchResult] = []
+            for (page, spineRef) in self.book.spine.spineReferences.enumerated() {
+                guard let html = try? String(contentsOfFile: spineRef.resource.fullHref, encoding: .utf8) else {
+                    continue
+                }
+                let tagRanges = (try? NSRegularExpression(pattern: "(<[^>]*>)|(&[#\\w]*;)", options: [])
+                                    .matches(in: html, options: [], range: NSRange(location: 0, length: html.count))
+                                    .map {$0.range}) ?? []
+                let matches = (try? NSRegularExpression(pattern: "\(text)", options: [.caseInsensitive])
+                                .matches(in: html, options: [], range: NSRange(location: 0, length: html.count))) ?? []
+                for match in matches {
+                    var isTag = false
+                    for tagRange in tagRanges {
+                        if NSEqualRanges(NSUnionRange(tagRange, match.range), tagRange) {
+                            isTag = true
+                            break
+                        }
+                    }
+                    if !isTag {
+                        let content = html[Range(match.range, in: html)!]
+                        let sideLength = 200
+                        let preRangeLocation = max(0, match.range.location - sideLength)
+                        let preRange = NSRange(location: preRangeLocation, length: match.range.location - preRangeLocation)
+                        let preContent = html[Range(preRange, in: html)!]
+                        let postRangeLocation = match.range.location + match.range.length
+                        let postRange = NSRange(location: postRangeLocation, length: min(sideLength, html.count - postRangeLocation))
+                        let postContent = html[Range(postRange, in: html)!]
+                        results.append(SearchResult(page: page,
+                                                    content: String(content),
+                                                    contentPre: String(preContent),
+                                                    contentPost: String(postContent),
+                                                    chapterName: self.getChapterName(forPage: page)))
+                    }
+                }
+            }
+            DispatchQueue.main.async {
+                completion(results)
+            }
+        }
+    }
+    private func htmlContentWithInsertSearchResults(_ htmlContent: String, pageNumber: Int) -> String {
+        guard let searchResults = Search.results?.filter { $0.page == pageNumber }, !searchResults.isEmpty else {
+            return htmlContent
+        }
+        var tempHtmlContent = htmlContent as NSString
+        for result in searchResults {
+            let tag = "<highlight id=\"\(result.id)\" class=\"highlight-blue\">\(result.content)</highlight>"
+            var locator = result.contentPre + result.content + result.contentPost
+            
+            let range: NSRange = tempHtmlContent.range(of: locator, options: .literal)
+            
+            if range.location != NSNotFound {
+                let newRange = NSRange(location: range.location + result.contentPre.count, length: result.content.count)
+                tempHtmlContent = tempHtmlContent.replacingCharacters(in: newRange, with: tag) as NSString
+            } else {
+                print("Search result range not found")
+            }
+        }
+        return tempHtmlContent as String
+    }
+    private func updateSearchResultHighlights() {
+        let pageItemNumber = self.getCurrentPageItemNumber()
+        self.collectionView.reloadData()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.changePageItem(to: pageItemNumber)
+        }
+    }
+    private func jumpTo(searchResult: SearchResult) {
+        if self.currentPage?.pageNumber == searchResult.page + 1 {
+            self.currentPage?.handleAnchor(searchResult.id, avoidBeginningAnchors: true, animated: false)
+        } else {
+            tempFragment = searchResult.id
+            self.changePageWith(page: searchResult.page + 1, animated: false, completion: nil)
+        }
     }
 
     // MARK: - ScrollView Delegate
@@ -1366,6 +1468,23 @@ open class FolioReaderCenter: UIViewController, UICollectionViewDelegate, UIColl
 
         menu.transitioningDelegate = animator
         self.present(menu, animated: true, completion: nil)
+    }
+    
+    /**
+     Present search menu
+     */
+    @objc func presentSearchMenu() {
+        let searchViewController = FolioReaderSearch(readerConfig: readerConfig)
+        searchViewController.searchHandler = { [weak self] text, completionHandler in
+            self?.search(text: text, completion: completionHandler)
+        }
+        searchViewController.updateHandler = { [weak self] in
+            self?.updateSearchResultHighlights()
+        }
+        searchViewController.jumpHandler = { [weak self] result in
+            self?.jumpTo(searchResult: result)
+        }
+        self.present(searchViewController, animated: true, completion: nil)
     }
 
     /**
